@@ -20,7 +20,9 @@ fi
 
 echo "Finding TARGETARN..."
 # https://awscli.amazonaws.com/v2/documentation/api/2.0.34/reference/elbv2/describe-target-groups.html
-TARGETARN=
+TARGETARN=$(aws elbv2 describe-target-groups \
+  --query "TargetGroups[?contains(TargetGroupName, 'module')].TargetGroupArn" \
+  --output text)
 echo $TARGETARN
 
 if [ "$INSTANCEIDS" != "" ]
@@ -31,10 +33,13 @@ if [ "$INSTANCEIDS" != "" ]
     INSTANCEIDSARRAY=($INSTANCEIDS)
     for INSTANCEID in ${INSTANCEIDSARRAY[@]};
       do
-      echo "Deregistering target $INSTANCEID..."
-      aws elbv2 deregister-targets 
-      echo "Waiting for target $INSTANCEID to be deregistered..."
-      aws elbv2 wait target-deregistered
+        echo "Deregistering target $INSTANCEID..."
+        aws elbv2 deregister-targets --target-group-arn "$TARGETARN" --targets Id="$INSTANCEID"
+      done
+    for INSTANCEID in ${INSTANCEIDSARRAY[@]};
+      do
+        echo "Waiting for target $INSTANCEID to be deregistered..."
+        aws elbv2 wait target-deregistered --target-group-arn "$TARGETARN" --targets Id="$INSTANCEID"
       done
   else
     echo 'There are no running or pending values in $INSTANCEIDS to wait for...'
@@ -44,9 +49,9 @@ fi
 echo "Now terminating the detached INSTANCEIDS..."
 if [ "$INSTANCEIDS" != "" ]
   then
-    aws ec2 terminate-instances
+    aws ec2 terminate-instances --instance-ids $INSTANCEIDS
     echo "Waiting for all instances report state as TERMINATED..."
-    aws ec2 wait instance-terminated
+    aws ec2 wait instance-terminated --instance-ids $INSTANCEIDS
     echo "Finished destroying instances..."
   else
     echo 'There are no running values in $INSTANCEIDS to be terminated...'
@@ -54,7 +59,9 @@ fi
 
 echo "Looking up ELB ARN..."
 # https://awscli.amazonaws.com/v2/documentation/api/2.0.34/reference/elbv2/describe-load-balancers.html
-ELBARN=
+ELBARN=$(aws elbv2 describe-load-balancers \
+  --query "LoadBalancers[?contains(LoadBalancerName, 'module')].LoadBalancerArn" \
+  --output text)
 echo $ELBARN
 
 # Collect ListenerARN
@@ -90,12 +97,12 @@ if [ "$ELBARN" = "" ];
 else
   echo "Issuing Command to delete Load Balancer.."
   # https://awscli.amazonaws.com/v2/documentation/api/2.0.34/reference/elbv2/delete-load-balancer.html
-  aws elbv2 delete-load-balancer 
+  aws elbv2 delete-load-balancer --load-balancer-arn "$ELBARN"
   echo "Load Balancer delete command has been issued..."
 
   echo "Waiting for ELB to be deleted..."
   # https://awscli.amazonaws.com/v2/documentation/api/2.0.34/reference/elbv2/wait/load-balancers-deleted.html#examples
-  aws elbv2 wait load-balancers-deleted
+  aws elbv2 wait load-balancers-deleted --load-balancer-arns "$ELBARN"
 fi
 
 
