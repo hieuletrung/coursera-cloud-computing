@@ -23,7 +23,9 @@ fi
 INSTANCEIDS=$(aws ec2 describe-instances --output=text --query 'Reservations[*].Instances[*].InstanceId' --filter "Name=instance-state-name,Values=running")
 
 echo 'Finding autoscaling group names...'
-ASGNAMES=
+ASGNAMES=$(aws autoscaling describe-auto-scaling-groups \
+  --query "AutoScalingGroups[*].AutoScalingGroupName" \
+  --output text)
 if [ "$ASGNAMES" != "" ]
   then
     echo "Found AutoScalingGroups: $ASGNAMES..."
@@ -32,17 +34,17 @@ if [ "$ASGNAMES" != "" ]
 
       aws autoscaling update-auto-scaling-group \
         --auto-scaling-group-name $ASGNAME \
-        --min-size 
+        --min-size 0
 
       aws autoscaling update-auto-scaling-group \
       --auto-scaling-group-name $ASGNAME \
-      --desired-capacity 
+      --desired-capacity 0
   
      if [ "$INSTANCEIDS" != "" ]
        then
          # Trying a trick here to use the ec2 terminate-instance waiter to let the autoscaling group wind down the instances
          echo "Waiting for all instances to be terminated..."
-         aws ec2 wait instance-terminated 
+         aws ec2 wait instance-terminated --instance-ids $INSTANCEIDS
          echo "All instances terminated..."
     else
       echo "No instances to wait for termination..."
@@ -57,7 +59,9 @@ fi
 
 echo "Finding TARGETARN..."
 # https://awscli.amazonaws.com/v2/documentation/api/2.0.34/reference/elbv2/describe-target-groups.html
-TARGETARN=
+TARGETARN=$(aws elbv2 describe-target-groups \
+  --query "TargetGroups[?contains(TargetGroupName, 'module')].TargetGroupArn" \
+  --output text)
 if [ "$TARGETARN" != "" ]
   then
     echo "Found TargetARN: $TARGETARN..."
@@ -76,6 +80,9 @@ if [ "$INSTANCEIDS" != "" ]
       do
       echo "Deregistering target $INSTANCEID..."
       aws elbv2 deregister-targets --target-group-arn $TARGETARN --targets Id=$INSTANCEID
+      done
+    for INSTANCEID in ${INSTANCEIDSARRAY[@]};
+      do
       echo "Waiting for target $INSTANCEID to be deregistered..."
       aws elbv2 wait target-deregistered --target-group-arn $TARGETARN --targets Id=$INSTANCEID
       done
@@ -85,7 +92,9 @@ fi
 
 echo "Looking up ELB ARN..."
 # https://awscli.amazonaws.com/v2/documentation/api/2.0.34/reference/elbv2/describe-load-balancers.html
-ELBARN=
+ELBARN=$(aws elbv2 describe-load-balancers \
+  --query "LoadBalancers[?contains(LoadBalancerName, 'module')].LoadBalancerArn" \
+  --output text)
 echo $ELBARN
 
 # Collect ListenerARN
@@ -155,7 +164,7 @@ if [ "$LAUNCHTEMPLATEIDS" != "" ]
   then
     echo "Found launch-tempate: $LAUNCHTEMPLATEIDS..."
     for LAUNCHTEMPLATEID in $LAUNCHTEMPLATEIDS; do
-      echo "Deleting launch-template: $LAUNCHTEMPID"
+      echo "Deleting launch-template: $LAUNCHTEMPLATEID"
       aws ec2 delete-launch-template --launch-template-name "$LAUNCHTEMPLATEID"
     done
 else

@@ -57,20 +57,41 @@ echo $SUBNET2B
 # Create AWS EC2 Launch Template
 # https://awscli.amazonaws.com/v2/documentation/api/2.0.33/reference/ec2/create-launch-template.html
 echo "Creating the AutoScalingGroup Launch Template..."
-aws ec2 create-launch-template 
+aws ec2 create-launch-template \
+  --launch-template-name "${12}" \
+  --version-description "v1" \
+  --launch-template-data file://$ltconfigfile
 echo "Launch Template created..."
 
 # Retreive the Launch Template ID using a --query
-LAUNCHTEMPLATEID=
+LAUNCHTEMPLATEID=$(aws ec2 describe-launch-templates \
+  --launch-template-names "${12}" \
+  --query 'LaunchTemplates[0].LaunchTemplateId' \
+  --output text)
+echo "Launch Template ID: $LAUNCHTEMPLATEID"
 
 echo 'Creating the TARGET GROUP and storing the ARN in $TARGETARN'
 # https://awscli.amazonaws.com/v2/documentation/api/2.0.34/reference/elbv2/create-target-group.html
-TARGETARN=
+TARGETARN=$(aws elbv2 create-target-group \
+  --name "${8}" \
+  --protocol HTTP \
+  --port 80 \
+  --vpc-id "$VPCID" \
+  --target-type instance \
+  --query 'TargetGroups[0].TargetGroupArn' \
+  --output text)
 echo $TARGETARN
 
 echo "Creating ELBv2 Elastic Load Balancer..."
 #https://awscli.amazonaws.com/v2/documentation/api/2.0.34/reference/elbv2/create-load-balancer.html
-ELBARN=
+ELBARN=$(aws elbv2 create-load-balancer \
+  --name "${9}" \
+  --subnets "$SUBNET2A" "$SUBNET2B" \
+  --security-groups "${4}" \
+  --scheme internet-facing \
+  --type application \
+  --query 'LoadBalancers[0].LoadBalancerArn' \
+  --output text)
 echo $ELBARN
 
 # Decrease the deregistration timeout (deregisters faster than the default 300 second timeout per instance)
@@ -80,22 +101,45 @@ aws elbv2 modify-target-group-attributes --target-group-arn $TARGETARN --attribu
 # AWS elbv2 wait for load-balancer available
 # https://awscli.amazonaws.com/v2/documentation/api/latest/reference/elbv2/wait/load-balancer-available.html
 echo "Waiting for load balancer to be available..."
-aws elbv2 wait load-balancer-available
+aws elbv2 wait load-balancer-available --load-balancer-arns "$ELBARN"
 echo "Load balancer available..."
 # create AWS elbv2 listener for HTTP on port 80
 #https://awscli.amazonaws.com/v2/documentation/api/latest/reference/elbv2/create-listener.html
-aws elbv2 create-listener 
+aws elbv2 create-listener \
+  --load-balancer-arn "$ELBARN" \
+  --protocol HTTP \
+  --port 80 \
+  --default-actions Type=forward,TargetGroupArn="$TARGETARN"
 
 echo 'Creating Auto Scaling Group...'
 # Create Autoscaling group ASG - needs to come after Target Group is created
 # Create autoscaling group
 # https://awscli.amazonaws.com/v2/documentation/api/latest/reference/autoscaling/create-auto-scaling-group.html
-aws autoscaling create-auto-scaling-group 
+echo "aws autoscaling create-auto-scaling-group \
+  --auto-scaling-group-name "${13}" \
+  --launch-template "LaunchTemplateId=$LAUNCHTEMPLATEID,Version=1" \
+  --min-size "${14}" \
+  --max-size "${15}" \
+  --desired-capacity "${16}" \
+  --vpc-zone-identifier "$SUBNET2A,$SUBNET2B" \
+  --target-group-arns "$TARGETARN" \
+  --tags "Key=Module,Value=${7}" \
+  --region "${17}""
+aws autoscaling create-auto-scaling-group \
+  --auto-scaling-group-name "${13}" \
+  --launch-template "LaunchTemplateId=$LAUNCHTEMPLATEID,Version=1" \
+  --min-size "${14}" \
+  --max-size "${15}" \
+  --desired-capacity "${16}" \
+  --vpc-zone-identifier "$SUBNET2A,$SUBNET2B" \
+  --target-group-arns "$TARGETARN" \
+  --tags "Key=Module,Value=${7}" \
+  --region "${17}"
 
 echo 'Waiting for Auto Scaling Group to spin up EC2 instances and attach them to the TargetARN...'
 # Create waiter for registering targets
 # https://docs.aws.amazon.com/cli/latest/reference/elbv2/wait/target-in-service.html
-aws elbv2 wait target-in-service
+aws elbv2 wait target-in-service --target-group-arn "$TARGETARN"
 echo "Targets attached to Auto Scaling Group..."
 
 # Collect Instance IDs
@@ -104,7 +148,7 @@ INSTANCEIDS=$(aws ec2 describe-instances --output=text --query 'Reservations[*].
 
 if [ "$INSTANCEIDS" != "" ]
   then
-    aws ec2 wait instance-running
+    aws ec2 wait instance-running --instance-ids $INSTANCEIDS
     echo "Finished launching instances..."
   else
     echo 'There are no running or pending values in $INSTANCEIDS to wait for...'
@@ -113,7 +157,10 @@ fi
 
 # Retreive ELBv2 URL via aws elbv2 describe-load-balancers --query and print it to the screen
 #https://awscli.amazonaws.com/v2/documentation/api/latest/reference/elbv2/describe-load-balancers.html
-URL=
+URL=$(aws elbv2 describe-load-balancers \
+  --load-balancer-arns "$ELBARN" \
+  --query 'LoadBalancers[0].DNSName' \
+  --output text)
 echo $URL
 
 # end of outer fi - based on arguments.txt content
