@@ -304,23 +304,24 @@ print('*' * 79)
 print("Testing to make sure two Block Stores are attached to each Ec2 instance...")
 count = 0
 
-try:
-  if len(responseEC2['Reservations'][0]['Instances']) == 0:
-    print("Beginning tests...")
-except IndexError:  
-  sys.exit("No EC2 instances in the RUNNING STATE - check that you ran your create-env.sh or wait 30-60 seconds more to make sure your instances are in the running state.")
+for m in range(0, len(responseEC2['Reservations'])):
+  try:
+    if len(responseEC2['Reservations'][m]['Instances']) == 0:
+      print("Beginning tests...")
+  except IndexError:  
+    sys.exit("No EC2 instances in the RUNNING STATE - check that you ran your create-env.sh or wait 30-60 seconds more to make sure your instances are in the running state.")
 
-for n in range(0,len(responseEC2['Reservations'][0]['Instances'])):
-  print("Checking number of EBS attached to InstanceID of: " + responseEC2['Reservations'][0]['Instances'][n]['InstanceId'])
-  if len(responseEC2['Reservations'][0]['Instances'][n]['BlockDeviceMappings']) == correctNumberOfEBS:
-    print("Correct number of EBS instances attached to InstanceID: " + str(responseEC2['Reservations'][0]['Instances'][n]['InstanceId']))
-    for j in range(0,len(responseEC2['Reservations'][0]['Instances'][n]['BlockDeviceMappings'])):
-      print("EBS Device name: " + str(responseEC2['Reservations'][0]['Instances'][n]['BlockDeviceMappings'][j]['DeviceName']))
-      print("Volume-ID of: " + str(responseEC2['Reservations'][0]['Instances'][n]['BlockDeviceMappings'][j]['Ebs']['VolumeId']))
-      count+=1
-      print("One point...")
-  else:
-    print("Incorrect Number of Elastic Block Stores created per instance, expecting " + str(correctNumberOfEBS) + ", received " + str(len(responseEC2['Reservations'][0]['Instances'][n]['BlockDeviceMappings'])) + " instances...")
+  for n in range(0,len(responseEC2['Reservations'][m]['Instances'])):
+    print("Checking number of EBS attached to InstanceID of: " + responseEC2['Reservations'][m]['Instances'][n]['InstanceId'])
+    if len(responseEC2['Reservations'][m]['Instances'][n]['BlockDeviceMappings']) == correctNumberOfEBS:
+      print("Correct number of EBS instances attached to InstanceID: " + str(responseEC2['Reservations'][m]['Instances'][n]['InstanceId']))
+      for j in range(0,len(responseEC2['Reservations'][m]['Instances'][n]['BlockDeviceMappings'])):
+        print("EBS Device name: " + str(responseEC2['Reservations'][m]['Instances'][n]['BlockDeviceMappings'][j]['DeviceName']))
+        print("Volume-ID of: " + str(responseEC2['Reservations'][m]['Instances'][n]['BlockDeviceMappings'][j]['Ebs']['VolumeId']))
+        count+=1
+        print("One point...")
+    else:
+      print("Incorrect Number of Elastic Block Stores created per instance, expecting " + str(correctNumberOfEBS) + ", received " + str(len(responseEC2['Reservations'][0]['Instances'][n]['BlockDeviceMappings'])) + " instances...")
 
 if count == 9:
   grandtotal+=1
