@@ -26,3 +26,5 @@ variable "min" { default = 2 }
 variable "max" { default = 5 }
 variable "desired" { default = 3 }
 variable "module-tag" {}
+variable "lt-region" { default = "us-east-2" }
+variable "ebs-size" { default = 15 }

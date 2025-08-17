@@ -1,0 +1,11 @@
+imageid                = "ami-0d1b5a8c13042c939"
+instance-type          = "t2.micro"
+key-name               = "coursera-key"
+vpc_security_group_ids = "sg-023a045c83fdc42f5"
+cnt                    = 3
+install-env-file       = "install-env.sh"
+elb-name               = "module7-elb"
+tg-name                = "module7-tg"
+asg-name               = "module7-asg"
+lt-name                = "module7-lt"
+module-tag             = "module7-tag"
